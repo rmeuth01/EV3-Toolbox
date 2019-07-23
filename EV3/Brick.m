@@ -75,6 +75,9 @@ classdef Brick < handle
         wfSN; 
         % bluetooth serial port
         serPort;
+        % Communication State (0 - no expected response, 1 - expected
+        % response)
+        commState;
     end
 
     methods
@@ -121,6 +124,8 @@ classdef Brick < handle
              opt = tb_optparse(opt, varargin);
              % select the connection interface
              connect = 0;
+             % Initialize Communication State
+             brick.commState = 0;
              % usb
              if(strcmp(opt.ioType,'usb'))
                 brick.debug = opt.debug;
@@ -172,6 +177,7 @@ classdef Brick < handle
                  fprintf('Please specify a serConn option: ''usb'',''wifi'',''bt'',''instrwifi'' or ''instrbt''.\n');
              end
         end
+        
         
         function delete(brick)
             % Brick.delete Delete the Brick object
@@ -237,14 +243,16 @@ classdef Brick < handle
             %
             % Example::
             %           voltage = b.uiReadVbatt()
-            
             cmd = Command();
             cmd.addHeaderDirectReply(42,4,0);
             cmd.opUI_READ_GET_VBATT(0);
             cmd.addLength();
+            c = onCleanup(@()expectedResponse(brick));
+            brick.commState = 1;
             brick.send(cmd);
             % receive the command
             msg = brick.receive()';
+            brick.commState = 0;
             voltage = typecast(uint8(msg(6:9)),'single');           
             if brick.debug > 0
                 fprintf('Battery voltage: %.02fV\n', voltage);
@@ -264,9 +272,12 @@ classdef Brick < handle
             cmd.addHeaderDirectReply(42,1,0);
             cmd.opUI_READ_GET_LBATT(0);
             cmd.addLength();
+            c = onCleanup(@()expectedResponse(brick));
+            brick.commState = 1;
             brick.send(cmd);
             % receive the command
             msg = brick.receive()';
+            brick.commState = 0;
             level = msg(6);
             if brick.debug > 0
                 fprintf('Battery level: %d%%\n', level);
@@ -280,6 +291,8 @@ classdef Brick < handle
         function level = GetBattLevel(brick)
             level = brick.uiReadLbatt();
         end
+        
+        
         
         function playTone(brick, volume, frequency, duration)  
             % Brick.playTone Play a tone on the brick
@@ -365,9 +378,12 @@ classdef Brick < handle
             cmd.addHeaderDirectReply(42,12,0);
             cmd.opINPUT_DEVICE_GET_NAME(0,no,12,0);
             cmd.addLength();
+            c = onCleanup(@()expectedResponse(brick));
+            brick.commState = 1;
             brick.send(cmd);
             % receive the command
             msg = brick.receive()';
+            brick.commState = 0;
             % return the device name
             name = sscanf(char(msg(6:end)),'%s');
         end
@@ -390,9 +406,12 @@ classdef Brick < handle
             cmd.addHeaderDirectReply(42,5,0);
             cmd.opINPUT_DEVICE_GET_SYMBOL(0,no,5,0);
             cmd.addLength();
+            c = onCleanup(@()expectedResponse(brick));
+            brick.commState = 1;
             brick.send(cmd);
             % receive the command
             msg = brick.receive()';
+            brick.commState = 0;
             % return the symbol name
             name = sscanf(char(msg(6:end)),'%s');
         end
@@ -423,8 +442,12 @@ classdef Brick < handle
             cmd.addHeaderDirectReply(42,0,1);
             cmd.opINPUT_DEVICE_SET_MODE(0,no-1,mode);
             cmd.addLength();
+            c = onCleanup(@()expectedResponse(brick));
+            brick.commState = 1;
             brick.send(cmd);
+            % receive the command
             msg = brick.receive()';
+            brick.commState = 0;
         end
         
         function reading = inputReadSI(brick,no,mode)
@@ -448,9 +471,12 @@ classdef Brick < handle
             cmd.addHeaderDirectReply(42,4,0);
             cmd.opINPUT_READSI(0,no-1,0,mode,0);
             cmd.addLength();
+            c = onCleanup(@()expectedResponse(brick));
+            brick.commState = 1;
             brick.send(cmd);
             % receive the command
             msg = brick.receive()';
+            brick.commState = 0;
             reading = typecast(uint8(msg(6:9)),'single');
             if brick.debug > 0
                  fprintf('Sensor reading: %.02f\n', reading);
@@ -464,9 +490,12 @@ classdef Brick < handle
             cmd.opINPUT_READRAW(0,no-1,0,mode,response_size);
             %cmd.opINPUT_DEVICE_READY_RAW(0,no-1,mode);
             cmd.addLength();
+            c = onCleanup(@()expectedResponse(brick));
+            brick.commState = 1;
             brick.send(cmd);
             % receive the command
             msg = brick.receive()';
+            brick.commState = 0;
             %display("Test 2")
             %reading = typecast(uint8(msg(6:9)),'single');
             %if brick.debug > 0
@@ -735,9 +764,12 @@ classdef Brick < handle
             cmd.addHeaderDirectReply(42,1,0);
             cmd.opOUTPUT_TEST(0,nos,0);
             cmd.addLength();
+            c = onCleanup(@()expectedResponse(brick));
+            brick.commState = 1;
             brick.send(cmd);
             % receive the command
             msg = brick.receive()';
+            brick.commState = 0;
             % motor state is the final byte
             state = msg(end);
         end
@@ -860,9 +892,12 @@ classdef Brick < handle
             cmd.opOUTPUT_GET_COUNT(0,num,0);
             % end fix by DS
             cmd.addLength();
+            c = onCleanup(@()expectedResponse(brick));
+            brick.commState = 1;
             brick.send(cmd);
             % receive the command
             msg = brick.receive()';
+            brick.commState = 0;
             tacho = typecast(uint8(msg(6:9)),'int32');
             if brick.debug > 0
                 fprintf('Tacho: %d degrees\n', tacho);
@@ -963,9 +998,12 @@ classdef Brick < handle
             cmd.addHeaderDirectReply(42,10,0);
             cmd.opCOMGET_GET_BRICKNAME(10,0);
             cmd.addLength();
+            c = onCleanup(@()expectedResponse(brick));
+            brick.commState = 1;
             brick.send(cmd);
             % receive the command
             msg = brick.receive()';
+            brick.commState = 0;
             % return the brick name
             name = sscanf(char(msg(6:end)),'%s');
         end
@@ -1034,9 +1072,12 @@ classdef Brick < handle
             cmd.addHeaderSystemReply(10);
             cmd.BEGIN_DOWNLOAD(length(input),dest);
             cmd.addLength();
+            c = onCleanup(@()expectedResponse(brick));
+            brick.commState = 1;
             brick.send(cmd);
-            % receive the sent response
-            rmsg = brick.receive();
+            % receive the command
+            msg = brick.receive()';
+            brick.commState = 0;
             handle = rmsg(end);
             pause(1)
             % send the file
@@ -1072,9 +1113,12 @@ classdef Brick < handle
             cmd.addHeaderSystemReply(12);
             cmd.BEGIN_UPLOAD(maxlength,dest);
             cmd.addLength();
+            c = onCleanup(@()expectedResponse(brick));
+            brick.commState = 1;
             brick.send(cmd);
-            % receive the sent response
-            rmsg = brick.receive();
+            % receive the command
+            msg = brick.receive()';
+            brick.commState = 0;
             % extract payload
             payload = rmsg(13:end);
             % print to file
@@ -1105,8 +1149,13 @@ classdef Brick < handle
             cmd.addHeaderSystemReply(13);
             cmd.LIST_FILES(maxlength,pathname);
             cmd.addLength();
+            c = onCleanup(@()expectedResponse(brick));
+            brick.commState = 1;
             brick.send(cmd);
+            % receive the command
             rmsg = brick.receive();
+            brick.commState = 0;
+            
             % print
             fprintf('%s',rmsg(13:end));
         end    
@@ -1127,8 +1176,13 @@ classdef Brick < handle
             cmd.addHeaderSystemReply(14);
             cmd.CREATE_DIR(pathname);
             cmd.addLength();
+            c = onCleanup(@()expectedResponse(brick));
+            brick.commState = 1;
             brick.send(cmd);
+            % receive the command
             rmsg = brick.receive();
+            brick.commState = 0;
+            
         end
         
         function deleteFile(brick,pathname)
@@ -1148,8 +1202,13 @@ classdef Brick < handle
             cmd.addHeaderSystemReply(15);
             cmd.DELETE_FILE(pathname);
             cmd.addLength();
+            c = onCleanup(@()expectedResponse(brick));
+            brick.commState = 1;
             brick.send(cmd);
+            % receive the command
             rmsg = brick.receive();
+            brick.commState = 0;
+            
         end
         
         function writeMailBox(brick,title,type,msg)
@@ -1272,5 +1331,13 @@ function out = makebrake(input)
     end
 end
 
-
+% Connection Cleanup Function
+function expectedResponse(brick)
+    if brick.commState == 1
+        disp("Cleaning up!");
+        % receive the command
+        msg = brick.receive()';
+        brick.commState = 0;
+    end
+end
 
